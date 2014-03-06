@@ -38,6 +38,7 @@
 from optparse import OptionParser
 import string
 import re
+import json
 
 CyrillicLetters = [" ",  # 0x20
                    "!",  # 0x21
@@ -293,10 +294,12 @@ class Paragraph:
         return
 
     def __str__(self):
-        return '{0} {1} {2}'.format(self.startTime, self.endTime, self.text)
+        #dirty manually build json
+        return '{{"startTime":"{0}","endTime":"{1}","align":"{2}","text":{3}}}' \
+        .format(self.startTime, self.endTime, self.align, json.dumps(self.text,ensure_ascii=False))
 
     def __eq__(self, other):
-        if self.text == other.text:
+        if self.text == other.text or str(self.startTime) == str(other.startTime):
             return True
         else:
             return False
@@ -325,6 +328,7 @@ def loadSubtitle(subtitle_file, codePage):
             real_bytes.append(ch)
 
     index = 0
+
     all_pars = []
     while index < len(real_bytes):
         paragraph = getPacParagraph(index, real_bytes, codePage)
@@ -531,8 +535,9 @@ def getPacParagraph(index, real_bytes, codePage):
 
     # Not currently used
     #endDelimiter = '\x00'
-    #alignment = real_bytes[feIndex + 1]
-    #verticalAlignment = real_bytes[feIndex - 1]
+    alignment = ord(real_bytes[feIndex + 1])
+    verticalAlignment = ord(real_bytes[feIndex - 1])
+
 
     p = Paragraph()
     timeStartIndex = feIndex - 15
@@ -560,7 +565,7 @@ def getPacParagraph(index, real_bytes, codePage):
     while index < len(real_bytes) and index <= maxIndex:
         if preTextCode == 'W16':
             if real_bytes[index] == '\xfe':
-                string_buffer += ' '
+                string_buffer += '<br />'
                 preTextCode = ''.join(real_bytes[index + 4: index + 7])
                 if preTextCode == 'W16':
                     index += 7
@@ -586,7 +591,7 @@ def getPacParagraph(index, real_bytes, codePage):
               string_buffer += ' '
 
           elif real_bytes[index] == '\xfe':
-              string_buffer += ' '
+              string_buffer += '<br />'
               index += 2
 
           elif codePage == 'latin':
@@ -619,15 +624,44 @@ def getPacParagraph(index, real_bytes, codePage):
     #p.text = string_buffer
     if p.text.count('.')==1:
       p.text=p.text.replace('.','');
+
+    if verticalAlignment<5:
+      if alignment==1:
+        p.align=7
+      elif alignment==0:
+        p.align=9
+      else:
+        p.align=8
+    elif verticalAlignment<9:
+      if alignment==1:
+        p.align=4
+      elif alignment==0:
+        p.align=6
+      else:
+        p.align=5
+    else:
+      if alignment==1:
+        p.align=1
+      elif alignment==0:
+        p.align=3
+      else:
+        p.align=2
+
     return p
 
 
 def writeOut(paragraphs, textOnly):
-    for line in paragraphs:
+    print('[')
+    length=len(paragraphs)
+    for i in range(0,length):
+        line=paragraphs[i]
         if textOnly:
             print line.text
         else:
             print line
+        if(i<length-1):
+            print(',')
+    print(']')
     exit()
 
 
